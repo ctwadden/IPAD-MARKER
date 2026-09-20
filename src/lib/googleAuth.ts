@@ -41,16 +41,29 @@ export const DRIVE_SCOPES = [
 
 export const ALL_SCOPES = [...CLASSROOM_SCOPES, ...DRIVE_SCOPES];
 
-const provider = new GoogleAuthProvider();
-ALL_SCOPES.forEach((scope) => {
-  provider.addScope(scope);
-});
+// Helper to build provider with custom parameters
+export const createGoogleProvider = (options?: { targetEmail?: string; targetDomain?: string }) => {
+  const p = new GoogleAuthProvider();
+  ALL_SCOPES.forEach((scope) => {
+    p.addScope(scope);
+  });
 
-// Configure login hint specifically for teacher account cwadden@gnspes.ca
-provider.setCustomParameters({
-  login_hint: 'cwadden@gnspes.ca',
-  prompt: 'select_account',
-});
+  const params: Record<string, string> = {
+    prompt: 'select_account',
+  };
+
+  if (options?.targetEmail) {
+    params.login_hint = options.targetEmail;
+  }
+  if (options?.targetDomain) {
+    params.hd = options.targetDomain;
+  }
+
+  p.setCustomParameters(params);
+  return p;
+};
+
+const provider = createGoogleProvider({ login_hint: 'cwadden@gnspes.ca' } as any);
 
 // Flag to indicate ongoing sign-in
 let isSigningIn = false;
@@ -80,10 +93,17 @@ export const initAuth = (
 };
 
 // Sign in with Google using popup
-export const googleSignIn = async (): Promise<{ user: User; accessToken: string } | null> => {
+export const googleSignIn = async (options?: {
+  targetEmail?: string;
+  targetDomain?: string;
+}): Promise<{ user: User; accessToken: string } | null> => {
   try {
     isSigningIn = true;
-    const result = await signInWithPopup(auth, provider);
+    const authProvider = options
+      ? createGoogleProvider(options)
+      : provider;
+
+    const result = await signInWithPopup(auth, authProvider);
     const credential = GoogleAuthProvider.credentialFromResult(result);
     if (!credential?.accessToken) {
       console.warn('No access token returned in credential, proceeding with auth token');
@@ -102,6 +122,15 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
   } finally {
     isSigningIn = false;
   }
+};
+
+// Switch account explicitly (e.g. from macchady@gmail.com to cwadden@gnspes.ca)
+export const switchGoogleAccount = async (targetEmail: string = 'cwadden@gnspes.ca'): Promise<{ user: User; accessToken: string } | null> => {
+  await logout();
+  return googleSignIn({
+    targetEmail,
+    targetDomain: targetEmail.includes('@') ? targetEmail.split('@')[1] : undefined,
+  });
 };
 
 export const getAccessToken = async (): Promise<string | null> => {

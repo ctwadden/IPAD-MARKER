@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { Submission, Rubric, Course, VoiceNote, FeedbackStamp, Annotation } from '../types';
 import { GradingCanvas } from './GradingCanvas';
+import { GoogleDocViewer } from './GoogleDocViewer';
+import { ensureSubmissionDocumentImages } from '../services/documentRenderer';
+import { User } from '../lib/googleAuth';
 import { VoiceDictationButton } from './VoiceDictationButton';
 import { AudioVoiceRecorder } from './AudioVoiceRecorder';
 import { DEFAULT_FEEDBACK_STAMPS } from '../data/defaultStamps';
@@ -30,6 +33,7 @@ import {
   Check,
   BookOpen,
   Camera,
+  ExternalLink,
 } from 'lucide-react';
 
 interface GradingStudioProps {
@@ -43,6 +47,8 @@ interface GradingStudioProps {
   isPassingBack: boolean;
   onOpenPreGradingDiagnostic?: () => void;
   onOpenDrive?: () => void;
+  authUser?: User | null;
+  onOpenClassroomModal?: () => void;
 }
 
 export const GradingStudio: React.FC<GradingStudioProps> = ({
@@ -56,6 +62,8 @@ export const GradingStudio: React.FC<GradingStudioProps> = ({
   isPassingBack,
   onOpenPreGradingDiagnostic,
   onOpenDrive,
+  authUser,
+  onOpenClassroomModal,
 }) => {
   const [activeView, setActiveView] = useState<'canvas' | 'ocr_split'>('canvas');
   const [isOcrRunning, setIsOcrRunning] = useState<boolean>(false);
@@ -739,29 +747,40 @@ export const GradingStudio: React.FC<GradingStudioProps> = ({
 
           {/* Main Canvas Overlay View */}
           {activeView === 'canvas' && (
-            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <FileText className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                  Marking Canvas — {displayName}
-                </h3>
-                <span className="text-xs text-slate-500 font-medium">
-                  Page 1 of {selectedSubmission.documentImageUrls.length || 1}
-                </span>
-              </div>
+            <>
+              {selectedSubmission.submissionType === 'gdoc' || selectedSubmission.driveFileId || selectedSubmission.alternateLink ? (
+                <GoogleDocViewer
+                  submission={selectedSubmission}
+                  authUser={authUser}
+                  onUpdateSubmission={onUpdateSubmission}
+                  onOpenClassroomModal={onOpenClassroomModal}
+                />
+              ) : (
+                <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <FileText className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      Marking Canvas — {displayName}
+                    </h3>
+                    <span className="text-xs text-slate-500 font-medium">
+                      Page 1 of {ensureSubmissionDocumentImages(selectedSubmission).length || 1}
+                    </span>
+                  </div>
 
-              <GradingCanvas
-                documentImageUrl={selectedSubmission.documentImageUrls[0] || ''}
-                annotations={selectedSubmission.annotations}
-                onAnnotationsChange={(updatedAnn) => {
-                  onUpdateSubmission({
-                    ...selectedSubmission,
-                    annotations: updatedAnn,
-                    draftSavedAt: new Date().toISOString(),
-                  });
-                }}
-              />
-            </div>
+                  <GradingCanvas
+                    documentImageUrl={ensureSubmissionDocumentImages(selectedSubmission)[0] || ''}
+                    annotations={selectedSubmission.annotations}
+                    onAnnotationsChange={(updatedAnn) => {
+                      onUpdateSubmission({
+                        ...selectedSubmission,
+                        annotations: updatedAnn,
+                        draftSavedAt: new Date().toISOString(),
+                      });
+                    }}
+                  />
+                </div>
+              )}
+            </>
           )}
 
           {/* OCR Split View */}
@@ -773,7 +792,7 @@ export const GradingStudio: React.FC<GradingStudioProps> = ({
                 </h4>
                 <div className="h-[520px] rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950">
                   <img
-                    src={selectedSubmission.documentImageUrls[0]}
+                    src={ensureSubmissionDocumentImages(selectedSubmission)[0]}
                     alt="Original Student Submission"
                     className="w-full h-full object-contain"
                   />

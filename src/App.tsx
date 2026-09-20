@@ -213,6 +213,35 @@ export default function App() {
     }
   };
 
+  const handleSwitchGoogleAccount = async (targetEmail: string = 'cwadden@gnspes.ca') => {
+    setIsSigningIn(true);
+    try {
+      await logout();
+      const res = await googleSignIn({
+        targetEmail,
+        targetDomain: targetEmail.includes('@') ? targetEmail.split('@')[1] : undefined,
+      });
+      if (res) {
+        setAuthUser(res.user);
+        setAccessToken(res.accessToken);
+        setToastNotification({
+          type: 'success',
+          message: `Switched Google account to ${res.user.email}!`,
+        });
+        setTimeout(() => setToastNotification(null), 4000);
+      }
+    } catch (err: any) {
+      console.error('Account switch error:', err);
+      setToastNotification({
+        type: 'error',
+        message: err?.message || 'Could not complete account switch to ' + targetEmail,
+      });
+      setTimeout(() => setToastNotification(null), 6000);
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
+
   const handleOpenClassroomModal = (tab: 'my_classes' | 'import_assignment' | 'import_classroom' | 'connection_test' = 'import_assignment') => {
     setClassroomModalInitialTab(tab);
     setIsClassroomModalOpen(true);
@@ -610,6 +639,7 @@ export default function App() {
         authUser={authUser}
         onSignIn={handleGoogleSignIn}
         onSignOut={handleGoogleSignOut}
+        onSwitchAccount={handleSwitchGoogleAccount}
         isSigningIn={isSigningIn}
       />
 
@@ -653,6 +683,8 @@ export default function App() {
             isPassingBack={isPassingBack}
             onOpenPreGradingDiagnostic={() => handleOpenPreGrading(selectedSubmission || undefined)}
             onOpenDrive={() => setActiveTab('drive')}
+            authUser={authUser}
+            onOpenClassroomModal={handleOpenClassroomModal}
           />
         )}
 

@@ -154,6 +154,11 @@ export interface Submission {
   preGradingImpression?: PreGradingImpression;
   similarityReport?: SimilarityReport;
   draftSavedAt?: string;
+  driveFileId?: string;
+  alternateLink?: string;
+  gdocTitle?: string;
+  gdocPreviewUrl?: string;
+  thumbnailUrl?: string;
 }
 
 export interface LearningGap {

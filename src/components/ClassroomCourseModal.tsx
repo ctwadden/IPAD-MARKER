@@ -441,27 +441,46 @@ export const ClassroomCourseModal: React.FC<ClassroomCourseModalProps> = ({
 
         {/* Account Status Banner */}
         {authUser ? (
-          <div className="px-6 py-2.5 bg-emerald-50 dark:bg-emerald-950/40 border-b border-emerald-200 dark:border-emerald-900/60 flex items-center justify-between flex-wrap gap-2 text-xs">
-            <div className="flex items-center gap-2">
-              <div className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-              <span className="text-slate-600 dark:text-slate-300">Connected Teacher Account:</span>
-              <span className="font-bold text-emerald-900 dark:text-emerald-300 font-mono">
+          <div className={`px-6 py-2.5 ${!authUser.email?.endsWith('@gnspes.ca') ? 'bg-amber-50 dark:bg-amber-950/40 border-b border-amber-200 dark:border-amber-900/60' : 'bg-emerald-50 dark:bg-emerald-950/40 border-b border-emerald-200 dark:border-emerald-900/60'} flex items-center justify-between flex-wrap gap-2 text-xs`}>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className={`w-2.5 h-2.5 rounded-full ${!authUser.email?.endsWith('@gnspes.ca') ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+              <span className="text-slate-600 dark:text-slate-300">Connected Google Account:</span>
+              <span className="font-bold text-slate-900 dark:text-white font-mono">
                 {authUser.email || 'cwadden@gnspes.ca'}
               </span>
-              <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 font-semibold text-[10px]">
-                Google Classroom Active
-              </span>
+              {!authUser.email?.endsWith('@gnspes.ca') ? (
+                <span className="px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200 font-semibold text-[10px]">
+                  Personal Account (School courses require @gnspes.ca)
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 font-semibold text-[10px]">
+                  GNSPES Classroom Active
+                </span>
+              )}
             </div>
-            {onSignOut && (
-              <button
-                type="button"
-                onClick={onSignOut}
-                className="text-[11px] text-slate-500 hover:text-rose-600 flex items-center gap-1 font-medium transition-colors"
-              >
-                <LogOut className="w-3 h-3" />
-                Disconnect
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {!authUser.email?.endsWith('@gnspes.ca') && onSignIn && (
+                <button
+                  type="button"
+                  onClick={onSignIn}
+                  disabled={isSigningIn}
+                  className="px-2.5 py-1 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold transition-colors shadow-sm flex items-center gap-1"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isSigningIn ? 'animate-spin' : ''}`} />
+                  <span>Switch to cwadden@gnspes.ca</span>
+                </button>
+              )}
+              {onSignOut && (
+                <button
+                  type="button"
+                  onClick={onSignOut}
+                  className="text-[11px] text-slate-500 hover:text-rose-600 flex items-center gap-1 font-medium transition-colors"
+                >
+                  <LogOut className="w-3 h-3" />
+                  Disconnect
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           <div className="px-6 py-3 bg-amber-50 dark:bg-amber-950/30 border-b border-amber-200 dark:border-amber-900/50 flex items-center justify-between flex-wrap gap-3 text-xs">

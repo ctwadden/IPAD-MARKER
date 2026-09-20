@@ -33,6 +33,7 @@ interface HeaderNavbarProps {
   authUser?: User | null;
   onSignIn?: () => void;
   onSignOut?: () => void;
+  onSwitchAccount?: (targetEmail: string) => void;
   isSigningIn?: boolean;
 }
 
@@ -51,6 +52,7 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
   authUser,
   onSignIn,
   onSignOut,
+  onSwitchAccount,
   isSigningIn,
 }) => {
   return (
@@ -167,6 +169,17 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
                     {authUser.email || 'cwadden@gnspes.ca'}
                   </span>
                 </div>
+
+                {authUser.email && !authUser.email.endsWith('@gnspes.ca') && (
+                  <button
+                    type="button"
+                    onClick={() => (onSwitchAccount ? onSwitchAccount('cwadden@gnspes.ca') : onSignIn?.())}
+                    title="Switch to cwadden@gnspes.ca (GNSPES School Domain)"
+                    className="px-2 py-1 rounded-lg bg-amber-100 hover:bg-amber-200 dark:bg-amber-950 dark:hover:bg-amber-900 text-amber-800 dark:text-amber-300 font-bold text-[10px] border border-amber-300 dark:border-amber-800 transition-colors hidden sm:block"
+                  >
+                    Switch GNSPES
+                  </button>
+                )}
 
                 {onSignOut && (
                   <button
