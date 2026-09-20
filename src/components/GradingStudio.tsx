@@ -28,18 +28,21 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Check,
+  BookOpen,
+  Camera,
 } from 'lucide-react';
 
 interface GradingStudioProps {
   submissions: Submission[];
-  selectedSubmission: Submission;
+  selectedSubmission: Submission | null;
   onSelectSubmission: (submission: Submission) => void;
   rubrics: Rubric[];
-  selectedCourse: Course;
+  selectedCourse: Course | null;
   onUpdateSubmission: (updated: Submission) => void;
   onPassbackToLms: (submission: Submission) => Promise<void>;
   isPassingBack: boolean;
   onOpenPreGradingDiagnostic?: () => void;
+  onOpenDrive?: () => void;
 }
 
 export const GradingStudio: React.FC<GradingStudioProps> = ({
@@ -52,14 +55,15 @@ export const GradingStudio: React.FC<GradingStudioProps> = ({
   onPassbackToLms,
   isPassingBack,
   onOpenPreGradingDiagnostic,
+  onOpenDrive,
 }) => {
   const [activeView, setActiveView] = useState<'canvas' | 'ocr_split'>('canvas');
   const [isOcrRunning, setIsOcrRunning] = useState<boolean>(false);
   const [isAiGrading, setIsAiGrading] = useState<boolean>(false);
   const [isPlagiarismScanning, setIsPlagiarismScanning] = useState<boolean>(false);
   const [isAutoStamping, setIsAutoStamping] = useState<boolean>(false);
-  const [activeRubricId, setActiveRubricId] = useState<string>(selectedSubmission.rubricId || rubrics[0]?.id || '');
-  const [teacherComments, setTeacherComments] = useState<string>(selectedSubmission.feedbackSummary || '');
+  const [activeRubricId, setActiveRubricId] = useState<string>(selectedSubmission?.rubricId || rubrics[0]?.id || '');
+  const [teacherComments, setTeacherComments] = useState<string>(selectedSubmission?.feedbackSummary || '');
 
   // User requirement: Collapsible Rubric Tab along the left side that folds/unfolds for canvas real estate
   const [isRubricDrawerOpen, setIsRubricDrawerOpen] = useState<boolean>(true);
@@ -73,6 +77,38 @@ export const GradingStudio: React.FC<GradingStudioProps> = ({
   >([]);
 
   const activeRubric = rubrics.find((r) => r.id === activeRubricId) || rubrics[0];
+
+  if (!selectedSubmission || submissions.length === 0) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-16 text-center">
+        <div className="p-8 sm:p-12 rounded-3xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl flex flex-col items-center gap-4">
+          <div className="w-16 h-16 rounded-3xl bg-indigo-50 dark:bg-indigo-950 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+            <BookOpen className="w-8 h-8" />
+          </div>
+          <h2 className="text-2xl font-black text-slate-900 dark:text-white">
+            No Student Submissions in Queue
+          </h2>
+          <p className="text-sm text-slate-600 dark:text-slate-400 max-w-lg leading-relaxed">
+            {selectedCourse
+              ? `There are no student papers loaded for "${selectedCourse.title}". You can scan student handwriting/PDFs with Google Drive or import turn-ins from Google Classroom.`
+              : 'Please select a class and assignment to begin grading student papers.'}
+          </p>
+          {onOpenDrive && (
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={onOpenDrive}
+                className="px-5 py-3 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-lg shadow-indigo-600/30 flex items-center gap-2 transition-all"
+              >
+                <Camera className="w-4 h-4" />
+                <span>Scan Student Papers (Drive PDF)</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   // OCR Recognition Trigger
   const handleRunOcr = async () => {
@@ -261,7 +297,7 @@ export const GradingStudio: React.FC<GradingStudioProps> = ({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `Grade_Assessment_${selectedCourse.code}_Backup.csv`);
+    link.setAttribute('download', `Grade_Assessment_${selectedCourse?.code || 'Class'}_Backup.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -329,7 +365,9 @@ export const GradingStudio: React.FC<GradingStudioProps> = ({
             <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               <span>Submitted: {new Date(selectedSubmission.submissionDate).toLocaleDateString()}</span>
               <span>•</span>
-              <span className="font-medium text-indigo-600 dark:text-indigo-400">{selectedCourse.title}</span>
+              <span className="font-medium text-indigo-600 dark:text-indigo-400">
+                {selectedCourse?.title || selectedSubmission.assignmentTitle}
+              </span>
               {selectedSubmission.draftSavedAt && (
                 <>
                   <span>•</span>
@@ -401,6 +439,26 @@ export const GradingStudio: React.FC<GradingStudioProps> = ({
             <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
             <span>Sheets Backup (CSV)</span>
           </button>
+
+          {/* Jump to Google Drive View */}
+          {onOpenDrive && (
+            <button
+              type="button"
+              onClick={onOpenDrive}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition-colors shadow-sm"
+              title="Open Google Drive Workspace Hub"
+            >
+              <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 87.3 78">
+                <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+                <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44c-.8 1.4-1.2 2.95-1.2 4.5h27.5z" fill="#00ac47"/>
+                <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
+                <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+                <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
+                <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
+              </svg>
+              <span>Google Drive</span>
+            </button>
+          )}
 
           {/* Return Passback to LMS button */}
           <button

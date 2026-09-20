@@ -16,7 +16,7 @@ import {
 interface AnalyticsViewProps {
   learningGaps: LearningGap[];
   students: Student[];
-  selectedCourse: Course;
+  selectedCourse: Course | null;
   onAddLearningGap: (gap: LearningGap) => void;
 }
 
@@ -74,7 +74,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({
             Student Performance & Gap Analytics
           </h1>
           <p className="text-xs text-indigo-200 mt-1">
-            Automated trend analysis from graded handwritten OCR essays for {selectedCourse.title}.
+            Automated trend analysis from graded handwritten OCR essays for {selectedCourse?.title || 'Selected Class'}.
           </p>
         </div>
       </div>

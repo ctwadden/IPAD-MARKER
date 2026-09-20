@@ -2,7 +2,8 @@
   "name": "Grade Assessment Tool",
   "description": "AI-powered teacher grading suite with handwritten OCR, Apple Pencil canvas markup, feedback stamps, collapsible rubrics, audio voice memos, blind grading, plagiarism detection, and Google Classroom/Drive sync.",
   "requestFramePermissions": [
-    "microphone"
+    "microphone",
+    "camera"
   ],
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"

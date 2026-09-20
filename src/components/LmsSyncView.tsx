@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Course, Submission } from '../types';
+import { User } from '../lib/googleAuth';
+import { syncGradeToGoogleClassroom } from '../services/classroomApi';
 import {
   RefreshCw,
   CheckCircle2,
@@ -12,15 +14,20 @@ import {
   Server,
   Layers,
   AlertCircle,
+  ShieldCheck,
+  User as UserIcon,
 } from 'lucide-react';
 
 interface LmsSyncViewProps {
   submissions: Submission[];
-  selectedCourse: Course;
+  selectedCourse: Course | null;
   onSyncCourse: () => void;
   onPassbackSubmission: (sub: Submission) => Promise<void>;
   isSyncing: boolean;
   onOpenClassroomModal?: () => void;
+  authUser?: User | null;
+  accessToken?: string | null;
+  onSignIn?: () => void;
 }
 
 export const LmsSyncView: React.FC<LmsSyncViewProps> = ({
@@ -30,6 +37,9 @@ export const LmsSyncView: React.FC<LmsSyncViewProps> = ({
   onPassbackSubmission,
   isSyncing,
   onOpenClassroomModal,
+  authUser,
+  accessToken,
+  onSignIn,
 }) => {
   const [syncedLogs, setSyncedLogs] = useState<
     { id: string; studentName: string; status: string; timestamp: string; transactionId: string }[]
@@ -117,13 +127,25 @@ export const LmsSyncView: React.FC<LmsSyncViewProps> = ({
             </div>
 
             <div>
-              <h3 className="text-lg font-bold">{selectedCourse.title}</h3>
+              <h3 className="text-lg font-bold">{selectedCourse?.title || 'No Class Selected'}</h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Course ID: {selectedCourse.lmsCourseId} • {selectedCourse.studentCount} Students
+                Course ID: {selectedCourse?.lmsCourseId || selectedCourse?.id || 'N/A'} • {selectedCourse?.studentCount || 0} Students
               </p>
             </div>
 
             <div className="flex flex-col gap-2 pt-3 border-t border-slate-800 text-xs text-slate-300">
+              <div className="flex justify-between">
+                <span className="text-slate-400">Teacher Account:</span>
+                <span className="font-semibold text-emerald-400 font-mono text-[11px]">
+                  {authUser?.email || 'cwadden@gnspes.ca'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Auth Status:</span>
+                <span className="font-semibold text-white">
+                  {authUser ? 'Signed In (Google OAuth)' : 'Ready (cwadden@gnspes.ca)'}
+                </span>
+              </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Sync Mode:</span>
                 <span className="font-semibold text-white">Bi-Directional API</span>
@@ -137,6 +159,23 @@ export const LmsSyncView: React.FC<LmsSyncViewProps> = ({
                 <span className="font-semibold text-emerald-400">Direct Passback</span>
               </div>
             </div>
+
+            {!authUser && onSignIn && (
+              <button
+                type="button"
+                onClick={onSignIn}
+                className="w-full py-2 px-3 rounded-xl bg-white text-slate-900 font-bold text-xs shadow flex items-center justify-center gap-2 transition-colors hover:bg-slate-100"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 48 48">
+                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+                  <path fill="none" d="M0 0h48v48H0z" />
+                </svg>
+                <span>Connect cwadden@gnspes.ca</span>
+              </button>
+            )}
 
             {onOpenClassroomModal && (
               <button

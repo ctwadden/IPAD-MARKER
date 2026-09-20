@@ -182,3 +182,50 @@ export interface BenchmarkMetrics {
   averageMemoryMb: number;
   cpuLoadPercent: number;
 }
+
+export interface DriveFileOwner {
+  displayName: string;
+  emailAddress?: string;
+  photoLink?: string;
+}
+
+export interface DriveFile {
+  id: string;
+  name: string;
+  mimeType: string;
+  description?: string;
+  starred?: boolean;
+  trashed?: boolean;
+  createdTime?: string;
+  modifiedTime?: string;
+  size?: string;
+  iconLink?: string;
+  thumbnailLink?: string;
+  webViewLink?: string;
+  webContentLink?: string;
+  owners?: DriveFileOwner[];
+  shared?: boolean;
+  isFolder?: boolean;
+  fileCategory?: 'document' | 'spreadsheet' | 'presentation' | 'pdf' | 'folder' | 'image' | 'archive' | 'other';
+}
+
+export interface ScanFolderConfig {
+  id: string;
+  name: string;
+  webViewLink?: string;
+  courseCode?: string;
+  isDefault?: boolean;
+  itemCount?: number;
+  lastSyncedAt?: string;
+}
+
+export interface ScannedImagePage {
+  id: string;
+  dataUrl: string;
+  fileName: string;
+  pageNumber: number;
+  rotation: number; // 0, 90, 180, 270
+  grayscale?: boolean;
+  contrastBoost?: boolean;
+}
+

@@ -15,19 +15,25 @@ import {
   Layers,
 } from 'lucide-react';
 import { Course } from '../types';
+import { User } from '../lib/googleAuth';
+import { LogOut, User as UserIcon } from 'lucide-react';
 
 interface HeaderNavbarProps {
   activeTab: GradingTab;
   setActiveTab: (tab: GradingTab) => void;
   darkMode: boolean;
   setDarkMode: (val: boolean) => void;
-  selectedCourse: Course;
+  selectedCourse: Course | null;
   courses: Course[];
   setSelectedCourse: (course: Course) => void;
   lmsSynced: boolean;
   onSyncLms: () => void;
   isSyncingLms: boolean;
   onOpenClassroomModal?: () => void;
+  authUser?: User | null;
+  onSignIn?: () => void;
+  onSignOut?: () => void;
+  isSigningIn?: boolean;
 }
 
 export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
@@ -42,6 +48,10 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
   onSyncLms,
   isSyncingLms,
   onOpenClassroomModal,
+  authUser,
+  onSignIn,
+  onSignOut,
+  isSigningIn,
 }) => {
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md transition-colors">
@@ -76,20 +86,30 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider leading-none">
                   Active Class
                 </span>
-                <select
-                  value={selectedCourse.id}
-                  onChange={(e) => {
-                    const found = courses.find((c) => c.id === e.target.value);
-                    if (found) setSelectedCourse(found);
-                  }}
-                  className="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer mt-0.5"
-                >
-                  {courses.map((course) => (
-                    <option key={course.id} value={course.id} className="dark:bg-slate-800">
-                      {course.code} — {course.title} ({course.section})
-                    </option>
-                  ))}
-                </select>
+                {courses.length > 0 ? (
+                  <select
+                    value={selectedCourse?.id || ''}
+                    onChange={(e) => {
+                      const found = courses.find((c) => c.id === e.target.value);
+                      if (found) setSelectedCourse(found);
+                    }}
+                    className="bg-transparent text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer mt-0.5"
+                  >
+                    {courses.map((course) => (
+                      <option key={course.id} value={course.id} className="dark:bg-slate-800">
+                        {course.code} — {course.title}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={onOpenClassroomModal}
+                    className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline mt-0.5 text-left"
+                  >
+                    + Add Class
+                  </button>
+                )}
               </div>
 
               {onOpenClassroomModal && (
@@ -99,7 +119,7 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
                   className="ml-1 px-2 py-1 rounded-lg bg-emerald-100 dark:bg-emerald-950/80 hover:bg-emerald-200 dark:hover:bg-emerald-900 text-emerald-800 dark:text-emerald-300 text-[10px] font-bold transition-colors whitespace-nowrap"
                   title="Open Google Classroom Class Selector & Importer"
                 >
-                  Switch / Import
+                  Manage Classes
                 </button>
               )}
             </div>
@@ -120,8 +140,62 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
             </button>
           </div>
 
-          {/* Right Utilities (Dark Mode Toggle & Quick Actions) */}
+          {/* Right Utilities (Google Classroom Account & Dark Mode Toggle) */}
           <div className="flex items-center gap-2">
+            {authUser ? (
+              <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-sm">
+                {authUser.photoURL ? (
+                  <img
+                    src={authUser.photoURL}
+                    alt={authUser.displayName || 'Google Classroom Teacher'}
+                    className="w-7 h-7 rounded-full border border-emerald-500 object-cover"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center text-xs font-bold shadow-sm">
+                    {authUser.email ? authUser.email[0].toUpperCase() : 'C'}
+                  </div>
+                )}
+                <div className="flex flex-col text-left leading-tight hidden md:block">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-100 truncate max-w-[130px]">
+                      {authUser.displayName || 'Chad Wadden'}
+                    </span>
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" title="Classroom Connected" />
+                  </div>
+                  <span className="text-[10px] text-slate-500 dark:text-slate-400 font-medium truncate max-w-[130px]">
+                    {authUser.email || 'cwadden@gnspes.ca'}
+                  </span>
+                </div>
+
+                {onSignOut && (
+                  <button
+                    onClick={onSignOut}
+                    title="Sign out of Google Classroom"
+                    className="p-1 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors ml-1"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            ) : (
+              <button
+                onClick={onSignIn}
+                disabled={isSigningIn}
+                title="Connect Google Classroom with cwadden@gnspes.ca"
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-750 text-slate-700 dark:text-slate-200 font-semibold text-xs border border-slate-300 dark:border-slate-700 shadow-sm transition-all hover:shadow"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 48 48">
+                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+                  <path fill="none" d="M0 0h48v48H0z" />
+                </svg>
+                <span>{isSigningIn ? 'Connecting...' : 'Connect cwadden@gnspes.ca'}</span>
+              </button>
+            )}
+
             <button
               onClick={() => setDarkMode(!darkMode)}
               className="p-2.5 rounded-xl text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
@@ -194,6 +268,25 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
           >
             <RefreshCw className="w-4 h-4" />
             LMS API Sync
+          </button>
+
+          <button
+            onClick={() => setActiveTab('drive')}
+            className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg transition-all whitespace-nowrap ${
+              activeTab === 'drive'
+                ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/30'
+                : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+            }`}
+          >
+            <svg className="w-4 h-4" viewBox="0 0 87.3 78" fill="currentColor">
+              <path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>
+              <path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44c-.8 1.4-1.2 2.95-1.2 4.5h27.5z" fill="#00ac47"/>
+              <path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>
+              <path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>
+              <path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>
+              <path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/>
+            </svg>
+            Google Drive
           </button>
 
           <button
