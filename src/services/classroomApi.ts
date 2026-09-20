@@ -274,6 +274,50 @@ export async function deleteGoogleCourseWork(
 }
 
 /**
+ * Pull the REAL text of a student's submitted Drive file so the marking canvas
+ * shows their actual work instead of a placeholder page.
+ *
+ * Returns '' (empty) on any failure or for file types we can't render as text
+ * (PDF, images, slides, sheets) so the caller can fall back to a placeholder.
+ * NOTE: deliberately does NOT reuse fetchDriveDocumentText() from driveApi,
+ * because that helper returns a hard-coded sample essay on failure — which would
+ * make every student's page show the same fake essay.
+ */
+async function fetchSubmissionDocText(accessToken: string, fileId: string): Promise<string> {
+  try {
+    // 1. Look up the file's mime type (Classroom attachments don't include it).
+    let mimeType = 'application/vnd.google-apps.document';
+    const metaRes = await fetch(
+      `https://www.googleapis.com/drive/v3/files/${fileId}?fields=mimeType&supportsAllDrives=true`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    if (metaRes.ok) {
+      const meta = await metaRes.json().catch(() => ({}));
+      if (meta.mimeType) mimeType = meta.mimeType;
+    }
+
+    // 2. Choose how to read it based on type.
+    let url: string;
+    if (mimeType === 'application/vnd.google-apps.document') {
+      // Native Google Doc → export as plain text
+      url = `https://www.googleapis.com/drive/v3/files/${fileId}/export?mimeType=text/plain`;
+    } else if (mimeType.startsWith('text/') || mimeType.includes('rtf')) {
+      // Uploaded .txt / .rtf → download raw
+      url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`;
+    } else {
+      // PDF / image / slides / sheet: not text-extractable here.
+      return '';
+    }
+
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!res.ok) return '';
+    return (await res.text()) || '';
+  } catch {
+    return '';
+  }
+}
+
+/**
  * Fetch student submissions for a specific coursework item.
  */
 export async function fetchGoogleSubmissions(
@@ -310,7 +354,7 @@ export async function fetchGoogleSubmissions(
   const data = await subRes.value.json().catch(() => ({}));
   const list: GoogleStudentSubmissionItem[] = data.studentSubmissions || [];
 
-  return list.map((item, index) => {
+  return Promise.all(list.map(async (item, index) => {
     const studentName = studentNameMap.get(item.userId) || `Student ${item.userId.slice(-4)}`;
     const hasAttachments = item.assignmentSubmission?.attachments && item.assignmentSubmission.attachments.length > 0;
     const firstAttachment = hasAttachments ? item.assignmentSubmission?.attachments?.[0] : undefined;
@@ -324,10 +368,17 @@ export async function fetchGoogleSubmissions(
       ? new Date(item.updateTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
       : 'Active Term 2026';
 
-    const defaultOcrText = `Student: ${studentName}\nAssignment: ${assignmentTitle}\nAttachment: ${attachTitle}\nStatus: ${item.state}\n\nThis Google Doc assignment submission was imported directly from Google Classroom.\n\nThe student submitted their work through Google Classroom GNSPES cloud. All paragraphs and student responses are loaded and ready for Apple Pencil handwritten feedback, criteria-based rubric scoring, and 2-way grade passback.`;
+    // Pull the student's ACTUAL document text from Drive (empty if unavailable).
+    const realDocText = driveId ? await fetchSubmissionDocText(accessToken, driveId) : '';
+    const hasRealDoc = realDocText.trim().length > 0;
+
+    const placeholderText = `Student: ${studentName}\nAssignment: ${assignmentTitle}\nAttachment: ${attachTitle}\nStatus: ${item.state}\n\nThis submission couldn't be read as text (it may be a PDF, image, slides, or you may not have Drive access to it yet).\n\nUse the "Open in Google Docs" button to view the original, or the Apple Pencil canvas to annotate.`;
+
+    // Real work when we have it; otherwise an honest note (never fake content).
+    const contentText = hasRealDoc ? realDocText : placeholderText;
 
     const renderedSvgUrl = createGoogleDocRenderedSvg(
-      defaultOcrText,
+      contentText,
       attachTitle,
       studentName,
       formattedDate
@@ -343,8 +394,8 @@ export async function fetchGoogleSubmissions(
       submissionType: 'gdoc',
       fileType: 'text',
       documentImageUrls: [renderedSvgUrl],
-      ocrText: defaultOcrText,
-      ocrConfidence: 98,
+      ocrText: contentText,
+      ocrConfidence: hasRealDoc ? 100 : 0,
       ocrProcessingTimeMs: 320,
       annotations: [],
       scores: [],
@@ -364,7 +415,7 @@ export async function fetchGoogleSubmissions(
       gdocPreviewUrl: previewUrl,
       thumbnailUrl: driveFile?.thumbnailUrl,
     };
-  });
+  }));
 }
 
 /**
