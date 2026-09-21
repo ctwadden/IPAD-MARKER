@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Submission, Annotation } from '../types';
 import { GradingCanvas } from './GradingCanvas';
-import { User, switchGoogleAccount } from '../lib/googleAuth';
+import { User, switchGoogleAccount, getAccessToken } from '../lib/googleAuth';
+import { renderDriveDocToPageImages } from '../services/pdfDocRenderer';
+import { ensureSubmissionDocumentImages } from '../services/documentRenderer';
 import {
   FileText,
   ExternalLink,
@@ -15,6 +17,9 @@ import {
   Globe,
   Info,
   Layers,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
 } from 'lucide-react';
 
 interface GoogleDocViewerProps {
@@ -34,6 +39,12 @@ export const GoogleDocViewer: React.FC<GoogleDocViewerProps> = ({
   const [isSwitchingAccount, setIsSwitchingAccount] = useState<boolean>(false);
   const [iframeError, setIframeError] = useState<boolean>(false);
 
+  // Real document pages (rendered from the actual Doc/PDF) for the marking canvas.
+  const [pdfPages, setPdfPages] = useState<string[] | null>(null);
+  const [isRenderingPdf, setIsRenderingPdf] = useState<boolean>(false);
+  const [pdfError, setPdfError] = useState<boolean>(false);
+  const [currentPage, setCurrentPage] = useState<number>(0);
+
   const docId = submission.driveFileId || (submission.alternateLink ? submission.alternateLink.match(/\/d\/([a-zA-Z0-9-_]+)/)?.[1] : '');
   const alternateLink = submission.alternateLink || (docId ? `https://docs.google.com/document/d/${docId}/edit` : undefined);
   
@@ -46,6 +57,61 @@ export const GoogleDocViewer: React.FC<GoogleDocViewerProps> = ({
     : undefined;
 
   const isPersonalAccount = authUser?.email && !authUser.email.endsWith('@gnspes.ca');
+
+  // Reset rendered pages when we switch to a different student's submission.
+  useEffect(() => {
+    setPdfPages(null);
+    setCurrentPage(0);
+    setPdfError(false);
+    setIsRenderingPdf(false);
+  }, [submission.id]);
+
+  // When the marking canvas is opened, render the REAL document to page images
+  // so the teacher marks on the actual formatted pages (not a text stand-in).
+  useEffect(() => {
+    if (activeTab !== 'canvas') return;
+    if (!docId) return;
+    if (pdfPages !== null || isRenderingPdf) return;
+
+    let cancelled = false;
+    (async () => {
+      setIsRenderingPdf(true);
+      setPdfError(false);
+      try {
+        const token = await getAccessToken();
+        if (!token) throw new Error('No Google access token available');
+        const images = await renderDriveDocToPageImages(token, docId);
+        if (cancelled) return;
+        if (images.length > 0) {
+          setPdfPages(images);
+          // Cache onto the submission so other views reuse the real pages.
+          onUpdateSubmission({ ...submission, documentImageUrls: images });
+        } else {
+          setPdfPages([]); // signals "tried, nothing usable" → fall back to text pages
+          setPdfError(true);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.warn('Could not render real document pages:', err);
+          setPdfPages([]);
+          setPdfError(true);
+        }
+      } finally {
+        if (!cancelled) setIsRenderingPdf(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, docId, pdfPages, isRenderingPdf]);
+
+  // Pages to mark on: real rendered pages when available, else the text fallback.
+  const markingPages =
+    pdfPages && pdfPages.length > 0 ? pdfPages : ensureSubmissionDocumentImages(submission);
+  const totalPages = markingPages.length || 1;
+  const safePage = Math.min(Math.max(currentPage, 0), totalPages - 1);
 
   const handleSwitchToGnspes = async () => {
     setIsSwitchingAccount(true);
@@ -172,22 +238,57 @@ export const GoogleDocViewer: React.FC<GoogleDocViewerProps> = ({
         </div>
       </div>
 
-      {/* VIEW 1: Apple Pencil & Stylus Marking Canvas (Directly on top of rendered Google Doc page) */}
+      {/* VIEW 1: Apple Pencil & Stylus Marking Canvas (Directly on top of the REAL rendered Doc page) */}
       {activeTab === 'canvas' && (
         <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col gap-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
               <FileText className="w-4 h-4 text-blue-600" />
               Google Doc Markup Canvas — {submission.gdocTitle || submission.assignmentTitle}
             </h3>
-            <span className="text-xs text-slate-500 font-medium">
-              Rendered Page 1 of 1 • Stylus & Feedback Stamps Active
-            </span>
+
+            {/* Page navigation */}
+            <div className="flex items-center gap-2">
+              {isRenderingPdf && (
+                <span className="text-xs text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1.5">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  Rendering real document…
+                </span>
+              )}
+              {!isRenderingPdf && pdfError && (
+                <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">
+                  Showing text version (couldn't render the original)
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.max(0, p - 1))}
+                disabled={safePage <= 0}
+                className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                aria-label="Previous page"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <span className="text-xs text-slate-500 font-medium tabular-nums whitespace-nowrap">
+                Page {safePage + 1} of {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={safePage >= totalPages - 1}
+                className="p-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                aria-label="Next page"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
 
           <GradingCanvas
-            documentImageUrl={submission.documentImageUrls[0] || ''}
+            key={`page-${safePage}`}
+            documentImageUrl={markingPages[safePage] || ''}
             annotations={submission.annotations}
+            pageIndex={safePage}
             onAnnotationsChange={(updatedAnn: Annotation[]) => {
               onUpdateSubmission({
                 ...submission,

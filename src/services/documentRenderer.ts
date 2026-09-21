@@ -2,10 +2,13 @@
  * Document Renderer for Google Docs & Digital Text Submissions
  * Converts student essay text, Google Docs, and typed coursework into high-resolution
  * rendered document page SVG data URLs so the Apple Pencil canvas and document preview
- * never display a blank screen.
+ * never display a blank screen. Long submissions are split across multiple flippable pages.
  */
 
 import { Submission } from '../types';
+
+// ~32 wrapped lines fit the body area of one letter-size page (y 215 → ~1000, 24px line height).
+const LINES_PER_PAGE = 32;
 
 /**
  * Split text into wrapped lines for SVG rendering
@@ -53,17 +56,18 @@ function escapeXml(unsafe: string): string {
 }
 
 /**
- * Generate a crisp, professional Google Doc styled page SVG Data URL.
- * Renders like a genuine Google Docs paper with title, student header, and body text.
+ * Build a single Google-Docs-styled page SVG from a slice of already-wrapped lines.
  */
-export function createGoogleDocRenderedSvg(
-  text: string,
-  docTitle: string,
+function buildDocPageSvg(
+  lines: string[],
+  cleanTitle: string,
   studentName: string,
-  dateStr: string = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  dateStr: string,
+  pageNum: number,
+  totalPages: number
 ): string {
-  const wrappedLines = wrapTextToLines(text, 68).slice(0, 32); // fit standard page
-  const cleanTitle = docTitle.replace(/\.gdoc$/i, '').trim();
+  const isFirstPage = pageNum === 1;
+  const titleText = isFirstPage ? cleanTitle : `${cleanTitle} (continued)`;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 816 1056" width="816" height="1056">
     <defs>
@@ -104,12 +108,12 @@ export function createGoogleDocRenderedSvg(
 
     <!-- Document Title -->
     <g transform="translate(68, 168)">
-      <text x="0" y="0" font-family="Georgia, 'Times New Roman', Times, serif" font-size="24" font-weight="bold" fill="#202124">${escapeXml(cleanTitle)}</text>
+      <text x="0" y="0" font-family="Georgia, 'Times New Roman', Times, serif" font-size="24" font-weight="bold" fill="#202124">${escapeXml(titleText)}</text>
     </g>
 
     <!-- Body Paragraphs (Rendered in Google Docs Style 11pt, 1.5 line height) -->
     <g transform="translate(68, 215)">
-      ${wrappedLines
+      ${lines
         .map((line, idx) => {
           if (!line) {
             return ''; // Empty spacing
@@ -123,7 +127,7 @@ export function createGoogleDocRenderedSvg(
     <g transform="translate(68, 1010)">
       <line x1="0" y1="0" x2="680" y2="0" stroke="#dadce0" stroke-width="1" />
       <text x="0" y="22" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="11" fill="#80868b">Google Classroom • GNSPES Education Cloud</text>
-      <text x="640" y="22" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="11" fill="#80868b">Page 1 of 1</text>
+      <text x="620" y="22" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="11" fill="#80868b">Page ${pageNum} of ${totalPages}</text>
     </g>
   </svg>`;
 
@@ -131,16 +135,58 @@ export function createGoogleDocRenderedSvg(
 }
 
 /**
+ * Generate a single Google Doc styled page SVG Data URL (first/only page).
+ * Kept for backwards compatibility; use createGoogleDocRenderedPages for multi-page docs.
+ */
+export function createGoogleDocRenderedSvg(
+  text: string,
+  docTitle: string,
+  studentName: string,
+  dateStr: string = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+): string {
+  const cleanTitle = docTitle.replace(/\.gdoc$/i, '').trim();
+  const wrappedLines = wrapTextToLines(text, 68).slice(0, LINES_PER_PAGE);
+  return buildDocPageSvg(wrappedLines, cleanTitle, studentName, dateStr, 1, 1);
+}
+
+/**
+ * Generate one Google Doc styled page SVG per LINES_PER_PAGE chunk of the text,
+ * so a full multi-page essay can be flipped through and annotated page-by-page.
+ */
+export function createGoogleDocRenderedPages(
+  text: string,
+  docTitle: string,
+  studentName: string,
+  dateStr: string = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+): string[] {
+  const cleanTitle = docTitle.replace(/\.gdoc$/i, '').trim();
+  const allLines = wrapTextToLines(text, 68);
+
+  const pageChunks: string[][] = [];
+  for (let i = 0; i < allLines.length; i += LINES_PER_PAGE) {
+    pageChunks.push(allLines.slice(i, i + LINES_PER_PAGE));
+  }
+  if (pageChunks.length === 0) {
+    pageChunks.push([]); // always render at least one page
+  }
+
+  const totalPages = pageChunks.length;
+  return pageChunks.map((lines, idx) =>
+    buildDocPageSvg(lines, cleanTitle, studentName, dateStr, idx + 1, totalPages)
+  );
+}
+
+/**
  * Ensure a submission has at least one valid document image to render on the canvas.
- * If empty or missing, it dynamically generates the Google Doc / essay page SVG so the canvas
- * NEVER shows a blank screen.
+ * If empty or missing, it dynamically generates the Google Doc / essay page SVGs so the canvas
+ * NEVER shows a blank screen. Returns one entry per page.
  */
 export function ensureSubmissionDocumentImages(submission: Submission): string[] {
   if (submission.documentImageUrls && submission.documentImageUrls.length > 0) {
     return submission.documentImageUrls;
   }
 
-  // Generate Google Doc page image from text and title
+  // Generate Google Doc page images from text and title
   const dateFormatted = submission.submissionDate
     ? new Date(submission.submissionDate).toLocaleDateString('en-US', {
         month: 'short',
@@ -154,12 +200,10 @@ export function ensureSubmissionDocumentImages(submission: Submission): string[]
       ? submission.ocrText
       : `Assignment Title: ${submission.assignmentTitle}\n\nStudent: ${submission.studentName}\nStatus: Turned In (Google Classroom)\n\nThis Google Doc submission has been imported directly from Google Classroom. It is ready for Apple Pencil markup, scoring with the course rubric, and instant grade passback.\n\nYou can annotate directly on this digital paper using the Pen, Highlighter, and Stamp tools above, or open the document directly in Google Docs with your GNSPES account.`;
 
-  const generatedSvg = createGoogleDocRenderedSvg(
+  return createGoogleDocRenderedPages(
     defaultContent,
     submission.gdocTitle || submission.assignmentTitle,
     submission.studentName,
     dateFormatted
   );
-
-  return [generatedSvg];
 }

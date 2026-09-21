@@ -1,5 +1,5 @@
 import { Course, ClassroomAssignment, Submission, Student } from '../types';
-import { createGoogleDocRenderedSvg } from './documentRenderer';
+import { createGoogleDocRenderedPages } from './documentRenderer';
 
 export interface GoogleClassroomCourseItem {
   id: string;
@@ -377,7 +377,7 @@ export async function fetchGoogleSubmissions(
     // Real work when we have it; otherwise an honest note (never fake content).
     const contentText = hasRealDoc ? realDocText : placeholderText;
 
-    const renderedSvgUrl = createGoogleDocRenderedSvg(
+    const renderedPages = createGoogleDocRenderedPages(
       contentText,
       attachTitle,
       studentName,
@@ -393,7 +393,7 @@ export async function fetchGoogleSubmissions(
       courseId: courseId,
       submissionType: 'gdoc',
       fileType: 'text',
-      documentImageUrls: [renderedSvgUrl],
+      documentImageUrls: renderedPages,
       ocrText: contentText,
       ocrConfidence: hasRealDoc ? 100 : 0,
       ocrProcessingTimeMs: 320,
